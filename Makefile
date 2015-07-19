@@ -1,6 +1,6 @@
-PKGS = harfbuzz cairo-ft freetype2 xcb xcb-render
+PKGS = harfbuzz freetype2 xcb xcb-render
 
-CFLAGS = `pkg-config --cflags $(PKGS)` -g
+CFLAGS = -Wall -Werror -Wno-unused `pkg-config --cflags $(PKGS)` -g
 LDFLAGS = `pkg-config --libs $(PKGS)` -lm
 
 all: hello-harfbuzz

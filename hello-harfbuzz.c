@@ -1,5 +1,6 @@
 #include <alloca.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <stdio.h>
 #include <inttypes.h>
 #include <math.h>
@@ -10,6 +11,30 @@
 
 #define FONT_SIZE 10
 #define MARGIN (FONT_SIZE * .5)
+
+
+xcb_render_pictformat_t get_pictformat_from_visual(xcb_render_query_pict_formats_reply_t *reply, xcb_visualid_t visual);
+
+
+static void
+put_str(xcb_connection_t *c, xcb_drawable_t drawable, xcb_gcontext_t gc,
+    char *str)
+{
+  xcb_generic_event_t *e;
+  int done = 0;
+  xcb_image_text_8 (c, strlen(str), drawable, gc, 20, 20, str);
+  xcb_flush(c);
+  while (!done && (e = xcb_wait_for_event (c))) {
+    xcb_generic_error_t *err = (xcb_generic_error_t *)e;
+    switch (e->response_type & ~0x80) {
+    case XCB_KEY_PRESS:
+      done = 1;
+    case 0:
+      printf("Received X11 error %d\n", err->error_code);
+    }
+    free (e);
+  }
+}
 
 static void
 testCookie (xcb_void_cookie_t cookie,
@@ -131,6 +156,7 @@ main(int argc, char **argv)
   xcb_gcontext_t       foreground;
   xcb_gcontext_t       background;
   xcb_generic_event_t *e;
+  xcb_void_cookie_t cookie;
   uint32_t             mask = 0;
   uint32_t             values[2];
 
@@ -179,6 +205,47 @@ main(int argc, char **argv)
 					      ceil(width),
 					      ceil(height));
 					      */
+
+  /* map the window on the screen */
+  xcb_map_window_checked (c, win);
+  testCookie(cookie, c, "can't map window");
+  xcb_flush (c);
+
+  xcb_rectangle_t window_rect = {
+    .x = 10,
+    .y = 10,
+    .width = 20,
+    .height = 20
+  };
+  xcb_render_color_t back_color = {
+    .red = 0xffff,
+    .green = 0xcccc,
+    .blue = 0x9999,
+    .alpha = 0xffff
+  };
+
+  xcb_rectangle_t rectangles[] = {
+    {40, 40, 20, 20},
+  };
+
+  xcb_flush(c);
+  while ((e = xcb_wait_for_event (c))) {
+    switch (e->response_type & ~0x80) {
+    case XCB_EXPOSE:
+      goto endloop1;
+      /*
+      xcb_poly_rectangle_checked (c, win, foreground, 1, rectangles);
+      testCookie(cookie, c, "can't poly rectangle");
+      xcb_flush (c);
+      */
+      break;
+    case XCB_KEY_PRESS:
+      goto endloop1;
+    }
+    free (e);
+  }
+  endloop1:{}
+
       /*
   cairo_t *cr;
   cr = cairo_create (cairo_surface);
@@ -202,7 +269,7 @@ main(int argc, char **argv)
       version->major_version, version->minor_version);
 
   xcb_render_glyphset_t gsid;
-  xcb_render_pictformat_t format;
+  xcb_render_pictformat_t format, window_format;
   xcb_render_pictforminfo_t *formats;
 
   /* get a pict format */
@@ -229,6 +296,19 @@ main(int argc, char **argv)
   }
   /* does the reply need to be freed? */
 
+  /* Get the xcb_render_pictformat_t associated with the window. */
+  window_format = get_pictformat_from_visual(formats_reply, screen->root_visual);
+
+
+  /* create picture to composite into */
+  xcb_render_picture_t window_pict = xcb_generate_id(c);
+  xcb_render_create_picture_checked(c, window_pict, win, window_format, 0, 0);
+  testCookie(cookie, c, "can't create picture");
+
+  cookie = xcb_render_fill_rectangles_checked(c, XCB_RENDER_PICT_OP_OVER,
+      window_pict, back_color, 1, &window_rect);
+  testCookie(cookie, c, "can't fill rectangles");
+
   /*
   iter = xcb_setup_roots_iterator (xcb_get_setup (c));
   for (; iter.rem; --screen, xcb_render_pictformat_next (&iter)) {
@@ -240,9 +320,8 @@ main(int argc, char **argv)
 
 
   gsid = xcb_generate_id (c);
-  xcb_void_cookie_t textCookie =
-    xcb_render_create_glyph_set_checked (c, gsid, format);
-  testCookie(textCookie, c, "can't create glyph set");
+  cookie = xcb_render_create_glyph_set_checked (c, gsid, format);
+  testCookie(cookie, c, "can't create glyph set");
 
   /* Set up cairo font face. */
       /*
@@ -266,7 +345,7 @@ main(int argc, char **argv)
     char glyphname[32];
     hb_font_get_glyph_name (hb_font, gid, glyphname, sizeof (glyphname));
 
-    printf ("%u. glyph='%s'\n", i, glyphname);
+    // printf ("%u. glyph='%s'\n", i, glyphname);
 
     /* load the glyph */
     ft_error = FT_Load_Glyph (ft_face, info[i].codepoint, FT_LOAD_RENDER);
@@ -290,7 +369,6 @@ main(int argc, char **argv)
     glyph.y_off = 0; // pos[i].y_advance / 64.;
     glyph_id = info[i].codepoint;
 
-    int8_t *buf;
     buf_size = 16;
     buf = alloca(buf_size);
     /*
@@ -309,18 +387,14 @@ main(int argc, char **argv)
     void*           palette;
     */
 
-    textCookie = xcb_render_add_glyphs_checked (c, gsid, 1,
+    cookie = xcb_render_add_glyphs_checked (c, gsid, 1,
 	&glyph_id, &glyph, buf_size, buf);
-    testCookie(textCookie, c, "can't add glyph");
+    testCookie(cookie, c, "can't add glyph");
 /*
     xcb_render_add_glyphs (c, gsid, 1, &glyph_id, &glyph, buf_size, buf);
 */
   }
 
-  /* map the window on the screen */
-  xcb_map_window (c, win);
-
-  xcb_flush (c);
 
   /* Set up baseline. */
     /*
@@ -338,12 +412,16 @@ main(int argc, char **argv)
   */
 
 
-  struct {
+  struct glyph_header {
+    uint8_t count;
+    uint8_t pad0[3];
     int16_t dx, dy;
-    /* list of card8 glyphs */
-    uint32_t len;
-    int8_t glyphs;
-  } *glyphitems = alloca(len * sizeof *glyphitems);
+  } *glyph_header;
+
+  uint8_t *glyphitems_buf;
+  uint32_t glyphitems_len = 0;
+
+  glyphitems_buf = alloca(len * (1 + sizeof *glyph_header));
 
     /*
   cairo_glyph_t *cairo_glyphs = cairo_glyph_allocate (len);
@@ -352,31 +430,43 @@ main(int argc, char **argv)
   double current_y = 0;
   for (unsigned int i = 0; i < len; i++)
   {
-    glyphitems[i].dx = current_x + pos[i].x_offset / 64.;
-    glyphitems[i].dy = -(current_y + pos[i].y_offset / 64.);
-    glyphitems[i].len = 1;
-    glyphitems[i].glyphs = info[i].codepoint;
-    if (buf_size & 3)
-      buf_size += 4 - (buf_size & 3);
-    glyph_id = info[i].codepoint;
+    struct glyph_header glyph_header = {
+      .count = 1,
+      .dx = current_x + pos[i].x_offset / 64.,
+      .dy = -(current_y + pos[i].y_offset / 64.),
+    };
+    memcpy(glyphitems_buf + glyphitems_len, &glyph_header, sizeof glyph_header);
+    glyphitems_len += sizeof(struct glyph_header);
+    glyphitems_buf[glyphitems_len] = info[i].codepoint;
+    glyphitems_len += 4;
+
     current_x += pos[i].x_advance / 64.;
     current_y += pos[i].y_advance / 64.;
+
+    /*
+    if (glyphitems_len & 3)
+      glyphitems_len += 4 - (glyphitems_len & 3);
+      */
   }
 
-  /* create picture to composite into */
-  xcb_render_picture_t pic = xcb_generate_id(c);
-  xcb_render_create_picture_checked(c, pic, win, format, 0, 0);
-  testCookie(textCookie, c, "can't create picture");
+  /* create src picture */
+  xcb_render_picture_t src = xcb_generate_id(c);
+  xcb_render_create_picture_checked(c, src, win, format, 0, 0);
+  testCookie(cookie, c, "can't create source picture");
 
   int16_t src_x = 0;
   int16_t src_y = 0;
 
-  textCookie = xcb_render_composite_glyphs_8_checked (c,
-      XCB_RENDER_PICT_OP_ADD, foreground, pic, format, gsid,
-    src_x, src_y, len, &glyphitems);
-  testCookie(textCookie, c, "can't composite glyph");
+  cookie = xcb_render_composite_glyphs_8_checked (c,
+      XCB_RENDER_PICT_OP_ADD, src, window_pict, window_format, gsid,
+    src_x, src_y, glyphitems_len, glyphitems_buf);
+  testCookie(cookie, c, "can't composite glyph");
+  /*
+	Errors:
+		Picture, PictOp, PictFormat, GlyphSet, Glyph
+		*/
 
-  xcb_render_free_picture(c, pic);
+  xcb_render_free_picture(c, window_pict);
   /*
   cairo_show_glyphs (cr, cairo_glyphs, len);
   cairo_glyph_free (cairo_glyphs);
@@ -414,7 +504,6 @@ main(int argc, char **argv)
   cairo_destroy (cr);
   cairo_surface_destroy (cairo_surface);
   */
-out:
   xcb_free_gc (c, foreground);
   xcb_free_gc (c, background);
   xcb_render_free_glyph_set (c, gsid);
@@ -428,3 +517,54 @@ out:
 
   return 0;
 }
+
+
+/**********************************************************
+ * This function searches through the reply for a 
+ * PictVisual who's xcb_visualid_t is the same as the one
+ * specified in query. The function will then return the
+ * xcb_render_pictformat_t from that PictVIsual structure. 
+ * This is useful for getting the xcb_render_pictformat_t that is
+ * the same visual type as the root window.
+ **********************************************************/
+/* from http://cgit.freedesktop.org/xcb/demo/tree/rendertest.c */
+xcb_render_pictformat_t get_pictformat_from_visual(xcb_render_query_pict_formats_reply_t *reply, xcb_visualid_t query)
+{
+    xcb_render_pictscreen_iterator_t screen_iter;
+    xcb_render_pictscreen_t    *cscreen;
+    xcb_render_pictdepth_iterator_t  depth_iter;
+    xcb_render_pictdepth_t     *cdepth;
+    xcb_render_pictvisual_iterator_t visual_iter; 
+    xcb_render_pictvisual_t    *cvisual;
+    xcb_render_pictformat_t  return_value;
+    
+    screen_iter = xcb_render_query_pict_formats_screens_iterator(reply);
+
+    while(screen_iter.rem)
+    {
+        cscreen = screen_iter.data;
+        
+        depth_iter = xcb_render_pictscreen_depths_iterator(cscreen);
+        while(depth_iter.rem)
+        {
+            cdepth = depth_iter.data;
+
+            visual_iter = xcb_render_pictdepth_visuals_iterator(cdepth);
+            while(visual_iter.rem)
+            {
+                cvisual = visual_iter.data;
+
+                if(cvisual->visual == query)
+                {
+                    return cvisual->format;
+                }
+                xcb_render_pictvisual_next(&visual_iter);
+            }
+            xcb_render_pictdepth_next(&depth_iter);
+        }
+        xcb_render_pictscreen_next(&screen_iter);
+    }
+    return_value = 0;
+    return return_value;
+}
+
