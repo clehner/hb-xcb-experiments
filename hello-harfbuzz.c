@@ -183,6 +183,13 @@ main(int argc, char **argv)
   values[1] = 0;
   xcb_create_gc (c, background, win, mask, values);
 
+  xcb_rectangle_t window_rect = {
+    .x = 0,
+    .y = 0,
+    .width = 150,
+    .height = 150
+  };
+
   /* create the window */
   win = xcb_generate_id(c);
   mask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
@@ -193,7 +200,7 @@ main(int argc, char **argv)
                      win,                           /* window Id     */
                      screen->root,                  /* parent window */
                      0, 0,                          /* x, y          */
-                     150, 150,                      /* width, height */
+                     window_rect.width, window_rect.height,
                      10,                            /* border_width  */
                      XCB_WINDOW_CLASS_INPUT_OUTPUT, /* class         */
                      screen->root_visual,           /* visual        */
@@ -212,16 +219,16 @@ main(int argc, char **argv)
   testCookie(cookie, c, "can't map window");
   xcb_flush (c);
 
-  xcb_rectangle_t window_rect = {
-    .x = 10,
-    .y = 10,
-    .width = 20,
-    .height = 20
-  };
   xcb_render_color_t back_color = {
     .red = 0xffff,
     .green = 0xcccc,
     .blue = 0x9999,
+    .alpha = 0xffff
+  };
+  xcb_render_color_t glyphs_color = {
+    .red = 0x2222,
+    .green = 0x2222,
+    .blue = 0x6666,
     .alpha = 0xffff
   };
 
@@ -318,15 +325,6 @@ main(int argc, char **argv)
   alpha_mask_format = alpha_forminfo_ptr->id;
 
 
-  /* create picture to composite into */
-  xcb_render_picture_t window_pict = xcb_generate_id(c);
-  xcb_render_create_picture_checked(c, window_pict, win, window_format, 0, 0);
-  testCookie(cookie, c, "can't create picture");
-
-  cookie = xcb_render_fill_rectangles_checked(c, XCB_RENDER_PICT_OP_OVER,
-      window_pict, back_color, 1, &window_rect);
-  testCookie(cookie, c, "can't fill rectangles");
-
   /*
   iter = xcb_setup_roots_iterator (xcb_get_setup (c));
   for (; iter.rem; --screen, xcb_render_pictformat_next (&iter)) {
@@ -388,7 +386,11 @@ main(int argc, char **argv)
     glyph_id = info[i].codepoint;
 
     buf_size = 16;
+    /*
     buf = alloca(buf_size);
+    memset(buf, 0xff, buf_size);
+    */
+    buf = bitmap->buffer;
     /*
     if (buf_size & 3)
       buf_size += 4 - (buf_size & 3);
@@ -467,18 +469,48 @@ main(int argc, char **argv)
       */
   }
 
+  /* create picture to composite into */
+  xcb_render_picture_t window_pict = xcb_generate_id(c);
+  xcb_render_create_picture_checked(c, window_pict, win, window_format, 0, 0);
+  testCookie(cookie, c, "can't create picture");
+
+  /*
+  cookie = xcb_render_fill_rectangles_checked(c, XCB_RENDER_PICT_OP_OVER,
+      window_pict, back_color, 1, rectangles);
+  testCookie(cookie, c, "can't fill rectangles");
+  */
+
+  /* create src picture */
+  xcb_pixmap_t src_pixmap = xcb_generate_id(c);
+  cookie = xcb_create_pixmap_checked(c, 8, src_pixmap, screen->root, 150, 150);
+  testCookie(cookie, c, "can't create pixmap");
+
+  xcb_render_picture_t src_pic = xcb_generate_id(c);
+  cookie = xcb_render_create_picture_checked(c, src_pic, screen->root, window_format, 0, 0);
+  testCookie(cookie, c, "can't create source picture");
+
+  cookie = xcb_render_fill_rectangles_checked(c, XCB_RENDER_PICT_OP_SRC,
+      src_pic, glyphs_color, 1, &window_rect);
+  testCookie(cookie, c, "can't fill rectangle");
+
+
+  /*
+  cookie = xcb_render_fill_rectangles_checked(c, XCB_RENDER_PICT_OP_OVER,
+      src, glyphs_color, 1, &window_rect);
+  testCookie(cookie, c, "can't fill rectangles");
+  */
+
   int16_t src_x = 0;
   int16_t src_y = 0;
 
-  /* create src picture */
-  xcb_render_picture_t src = xcb_generate_id(c);
-  xcb_render_create_picture_checked(c, src, win, window_format, 0, 0);
-  testCookie(cookie, c, "can't create source picture");
+  /* composite the glyphs */
 
   cookie = xcb_render_composite_glyphs_8_checked (c,
-      XCB_RENDER_PICT_OP_ADD, src, window_pict, alpha_mask_format, gsid,
+      XCB_RENDER_PICT_OP_ADD, src_pic, window_pict, 0, gsid,
     src_x, src_y, glyphitems_len, glyphitems_buf);
   testCookie(cookie, c, "can't composite glyphs");
+
+  xcb_flush(c);
   /*
 	Errors:
 		Picture, PictOp, PictFormat, GlyphSet, Glyph
