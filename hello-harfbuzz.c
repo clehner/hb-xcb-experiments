@@ -452,8 +452,8 @@ main(int argc, char **argv)
   {
     struct glyph_header glyph_header = {
       .count = 1,
-      .dx = current_x + pos[i].x_offset / 64.,
-      .dy = -(current_y + pos[i].y_offset / 64.),
+      .dx = (pos[i].x_advance + pos[i].x_offset) / 64.,
+      .dy = (-pos[i].y_advance + pos[i].y_offset) / 64.,
     };
     memcpy(glyphitems_buf + glyphitems_len, &glyph_header, sizeof glyph_header);
     glyphitems_len += sizeof(struct glyph_header);
