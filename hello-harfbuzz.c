@@ -9,7 +9,7 @@
 #include <xcb/xcb.h>
 #include <xcb/render.h>
 
-#define FONT_SIZE 10
+#define FONT_SIZE 30
 #define MARGIN (FONT_SIZE * .5)
 
 
@@ -377,20 +377,29 @@ main(int argc, char **argv)
 	bitmap->width, bitmap->rows);
 
     /* copy into glyph data for xcb */
-    glyph.width = 4; // bitmap->width;
-    glyph.height = 4; // bitmap->rows;
+    glyph.width = bitmap->width;
+    glyph.height = bitmap->rows;
     glyph.x = 0;
     glyph.y = 0; /* negative? 0? */
     glyph.x_off = 0; // pos[i].x_advance / 64.;
     glyph.y_off = 0; // pos[i].y_advance / 64.;
     glyph_id = info[i].codepoint;
 
-    buf_size = 16;
-    /*
+    if (glyph.width & 3)
+      glyph.width += 4 - (glyph.width & 3);
+    if (glyph.height & 3)
+      glyph.height += 4 - (glyph.height & 3);
+
+    buf_size = glyph.width * glyph.height;
     buf = alloca(buf_size);
-    memset(buf, 0xff, buf_size);
+    uint8_t *bitmap_buf = bitmap->buffer;
+    int8_t orig_width = bitmap->width;
+    for (unsigned int y = 0; y < glyph.height; y++)
+      for (unsigned int x = 0; x < glyph.width; x++)
+	buf[y * glyph.width + x] = bitmap->buffer[y * orig_width + x];
+    /*
+    memset(buf, 0x44, buf_size);
     */
-    buf = bitmap->buffer;
     /*
     if (buf_size & 3)
       buf_size += 4 - (buf_size & 3);
