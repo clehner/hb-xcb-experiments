@@ -14,6 +14,7 @@
 
 
 xcb_render_pictformat_t get_pictformat_from_visual(xcb_render_query_pict_formats_reply_t *reply, xcb_visualid_t visual);
+xcb_render_pictforminfo_t *get_pictforminfo(xcb_render_query_pict_formats_reply_t *reply, xcb_render_pictforminfo_t *query);
 
 
 static void
@@ -299,6 +300,23 @@ main(int argc, char **argv)
   /* Get the xcb_render_pictformat_t associated with the window. */
   window_format = get_pictformat_from_visual(formats_reply, screen->root_visual);
 
+  /* Setting query so that it will search for an 8 bit alpha surface. */
+  xcb_render_pictforminfo_t    *alpha_forminfo_ptr, query;
+  xcb_render_pictformat_t      alpha_mask_format;
+
+  query.id = 0;
+  query.type = XCB_RENDER_PICT_TYPE_DIRECT;
+  query.depth = 8;
+  query.direct.red_mask = 0;
+  query.direct.green_mask = 0;
+  query.direct.blue_mask = 0;
+  query.direct.alpha_mask = 255;
+
+  /* Get the xcb_render_pictformat_t we will use for the alpha mask */
+  alpha_forminfo_ptr = get_pictforminfo(formats_reply, &query);
+
+  alpha_mask_format = alpha_forminfo_ptr->id;
+
 
   /* create picture to composite into */
   xcb_render_picture_t window_pict = xcb_generate_id(c);
@@ -320,7 +338,7 @@ main(int argc, char **argv)
 
 
   gsid = xcb_generate_id (c);
-  cookie = xcb_render_create_glyph_set_checked (c, gsid, format);
+  cookie = xcb_render_create_glyph_set_checked (c, gsid, alpha_mask_format);
   testCookie(cookie, c, "can't create glyph set");
 
   /* Set up cairo font face. */
@@ -449,36 +467,28 @@ main(int argc, char **argv)
       */
   }
 
-  /* create src picture */
-  xcb_render_picture_t src = xcb_generate_id(c);
-  xcb_render_create_picture_checked(c, src, win, format, 0, 0);
-  testCookie(cookie, c, "can't create source picture");
-
   int16_t src_x = 0;
   int16_t src_y = 0;
 
+  /* create src picture */
+  xcb_render_picture_t src = xcb_generate_id(c);
+  xcb_render_create_picture_checked(c, src, win, window_format, 0, 0);
+  testCookie(cookie, c, "can't create source picture");
+
   cookie = xcb_render_composite_glyphs_8_checked (c,
-      XCB_RENDER_PICT_OP_ADD, src, window_pict, window_format, gsid,
+      XCB_RENDER_PICT_OP_ADD, src, window_pict, alpha_mask_format, gsid,
     src_x, src_y, glyphitems_len, glyphitems_buf);
-  testCookie(cookie, c, "can't composite glyph");
+  testCookie(cookie, c, "can't composite glyphs");
   /*
 	Errors:
 		Picture, PictOp, PictFormat, GlyphSet, Glyph
 		*/
 
   xcb_render_free_picture(c, window_pict);
-  /*
-  cairo_show_glyphs (cr, cairo_glyphs, len);
-  cairo_glyph_free (cairo_glyphs);
-  Picture, PictOp, PictFormat, GlyphSet, Glyph
-  */
 
   /*
   cairo_surface_write_to_png (cairo_surface, "out.png");
   */
-  /*
-  xcb_render_composite_glyphs_8();
-      */
 
   while ((e = xcb_wait_for_event (c))) {
   xcb_generic_error_t *err = (xcb_generic_error_t *)e;
@@ -566,5 +576,61 @@ xcb_render_pictformat_t get_pictformat_from_visual(xcb_render_query_pict_formats
     }
     return_value = 0;
     return return_value;
+}
+
+
+xcb_render_pictforminfo_t *get_pictforminfo(xcb_render_query_pict_formats_reply_t *reply, xcb_render_pictforminfo_t *query)
+{
+    xcb_render_pictforminfo_iterator_t forminfo_iter;
+    
+    forminfo_iter = xcb_render_query_pict_formats_formats_iterator(reply);
+
+    while(forminfo_iter.rem)
+    {
+        xcb_render_pictforminfo_t *cformat;
+        cformat  = forminfo_iter.data;
+        xcb_render_pictforminfo_next(&forminfo_iter);
+
+        if( (query->id != 0) && (query->id != cformat->id) )
+        {
+            continue;
+        }
+
+        if(query->type != cformat->type)
+        {
+            continue;
+        }
+        
+        if( (query->depth != 0) && (query->depth != cformat->depth) )
+        {
+            continue;
+        }
+        
+        if( (query->direct.red_mask  != 0)&& (query->direct.red_mask != cformat->direct.red_mask))
+        {
+            continue;
+        }
+        
+        if( (query->direct.green_mask != 0) && (query->direct.green_mask != cformat->direct.green_mask))
+        {
+            continue;
+        }
+        
+        if( (query->direct.blue_mask != 0) && (query->direct.blue_mask != cformat->direct.blue_mask))
+        {
+            continue;
+        }
+        
+        if( (query->direct.alpha_mask != 0) && (query->direct.alpha_mask != cformat->direct.alpha_mask))
+        {
+            continue;
+        }
+        
+        /* This point will only be reached if the pict format   *
+         * matches what the user specified                      */
+        return cformat; 
+    }
+    
+    return NULL;
 }
 
