@@ -8,7 +8,7 @@
 #include <xcb/xcb.h>
 #include <xcb/render.h>
 
-#define FONT_SIZE 36
+#define FONT_SIZE 10
 #define MARGIN (FONT_SIZE * .5)
 
 static void
@@ -18,7 +18,7 @@ testCookie (xcb_void_cookie_t cookie,
 {
 	xcb_generic_error_t *error = xcb_request_check (connection, cookie);
 	if (error) {
-		fprintf (stderr, "ERROR: %s : %"PRIu8"\n", errMessage , error->error_code);
+		printf ("ERROR: %s : %"PRIu8"\n", errMessage , error->error_code);
 		xcb_disconnect (connection);
 		exit (-1);
 	}
@@ -89,7 +89,7 @@ main(int argc, char **argv)
 
   printf ("Converted to absolute positions:\n");
   /* And converted to absolute positions. */
-  {
+  if (0) {
     double current_x = 0;
     double current_y = 0;
     for (unsigned int i = 0; i < len; i++)
@@ -188,6 +188,19 @@ main(int argc, char **argv)
   cairo_translate (cr, MARGIN, MARGIN);
   */
 
+  xcb_render_query_version_cookie_t version_cookie;
+  xcb_render_query_version_reply_t *version;
+  version_cookie = xcb_render_query_version (c,
+      XCB_RENDER_MAJOR_VERSION, XCB_RENDER_MINOR_VERSION);
+  // testCookie(version_cookie, c, "can't query version");
+  version = xcb_render_query_version_reply (c, version_cookie, 0);
+  if (!version) {
+    printf("no render version\n");
+    return 1;
+  }
+  printf("render version: %u.%u\n",
+      version->major_version, version->minor_version);
+
   xcb_render_glyphset_t gsid;
   xcb_render_pictformat_t format;
   xcb_render_pictforminfo_t *formats;
@@ -208,7 +221,8 @@ main(int argc, char **argv)
     printf("pict format: type=%u, depth=%u\n", formats[i].type,
 	formats[i].depth);
       /* TODO: figure out which one should really be picked */
-    if (formats[i].depth == 8) {
+    if (formats[i].type == XCB_RENDER_PICT_TYPE_DIRECT &&
+	formats[i].depth == 32) {
       format = xcb_render_query_pict_formats_formats(formats_reply)->id;
       break;
     }
@@ -223,6 +237,7 @@ main(int argc, char **argv)
     break;
   }
   */
+
 
   gsid = xcb_generate_id (c);
   xcb_void_cookie_t textCookie =
@@ -244,39 +259,46 @@ main(int argc, char **argv)
 
   for (unsigned int i = 0; i < len; i++)
   {
-    /* convert character code to glyph index */
+    /* convert character code to glyph index? */
     // glyph_index = FT_Get_Char_Index( face, info[i].codepoint );
-    FT_GlyphSlot slot = ft_face->glyph;
-    FT_Bitmap *bitmap = &ft_face->glyph->bitmap;
-
-    /* rasterize the glyph */
-    FT_Load_Glyph (ft_face, info[i].codepoint, FT_LOAD_RENDER);
-
-    /* copy into glyph data for xcb */
-    glyph.width = bitmap->width;
-    glyph.height = bitmap->rows;
-    glyph.x = slot->bitmap_left;
-    glyph.y = slot->bitmap_top; /* negative? 0? */
-    glyph.x_off = pos[i].x_advance;
-    glyph.y_off = pos[i].y_advance;
-    glyph_id = i;
 
     hb_codepoint_t gid = info[i].codepoint;
     char glyphname[32];
     hb_font_get_glyph_name (hb_font, gid, glyphname, sizeof (glyphname));
 
-    printf ("glyph='%s'	size=(%u,%u)\n",
-            glyphname, bitmap->width, bitmap->rows);
+    printf ("%u. glyph='%s'\n", i, glyphname);
 
-    buf_size = bitmap->width * bitmap->rows;
-    /*
-    buf = alloca(buf_size);
-    for (unsigned int x = 0; x < bitmap->width; x++) {
-      for (unsigned int y = 0; y < bitmap->rows; y++) {
-	buf[x] = bitmap->buffer[x + y * bitmap->width];
-      }
+    /* load the glyph */
+    ft_error = FT_Load_Glyph (ft_face, info[i].codepoint, FT_LOAD_RENDER);
+    if (ft_error) {
+      printf("error loading glyph\n");
+      continue;
     }
-    */
+
+    FT_GlyphSlot slot = ft_face->glyph;
+    FT_Bitmap *bitmap = &slot->bitmap;
+
+    printf("bitmap size=(%u,%u)\n",
+	bitmap->width, bitmap->rows);
+
+    /* copy into glyph data for xcb */
+    glyph.width = 4; // bitmap->width;
+    glyph.height = 4; // bitmap->rows;
+    glyph.x = 0;
+    glyph.y = 0; /* negative? 0? */
+    glyph.x_off = 0; // pos[i].x_advance / 64.;
+    glyph.y_off = 0; // pos[i].y_advance / 64.;
+    glyph_id = info[i].codepoint;
+
+    int8_t *buf;
+    buf_size = 16;
+    buf = alloca(buf_size);
+    /*
+    if (buf_size & 3)
+      buf_size += 4 - (buf_size & 3);
+    if ((size_t)buf & 3)
+      buf += 4 - ((size_t)buf & 3);
+      */
     /*
      * more bitmap properties:
     int             pitch;
@@ -288,9 +310,11 @@ main(int argc, char **argv)
     */
 
     textCookie = xcb_render_add_glyphs_checked (c, gsid, 1,
-	&glyph_id, &glyph, buf_size, bitmap->buffer);
+	&glyph_id, &glyph, buf_size, buf);
     testCookie(textCookie, c, "can't add glyph");
-
+/*
+    xcb_render_add_glyphs (c, gsid, 1, &glyph_id, &glyph, buf_size, buf);
+*/
   }
 
   /* map the window on the screen */
@@ -313,38 +337,61 @@ main(int argc, char **argv)
   }
   */
 
+
+  struct {
+    int16_t dx, dy;
+    /* list of card8 glyphs */
+    uint32_t len;
+    int8_t glyphs;
+  } *glyphitems = alloca(len * sizeof *glyphitems);
+
     /*
   cairo_glyph_t *cairo_glyphs = cairo_glyph_allocate (len);
   */
-#if 0
   double current_x = 0;
   double current_y = 0;
   for (unsigned int i = 0; i < len; i++)
   {
-    /*
-    cairo_glyphs[i].index = info[i].codepoint;
-    cairo_glyphs[i].x = current_x + pos[i].x_offset / 64.;
-    cairo_glyphs[i].y = -(current_y + pos[i].y_offset / 64.);
-    */
+    glyphitems[i].dx = current_x + pos[i].x_offset / 64.;
+    glyphitems[i].dy = -(current_y + pos[i].y_offset / 64.);
+    glyphitems[i].len = 1;
+    glyphitems[i].glyphs = info[i].codepoint;
+    if (buf_size & 3)
+      buf_size += 4 - (buf_size & 3);
+    glyph_id = info[i].codepoint;
     current_x += pos[i].x_advance / 64.;
     current_y += pos[i].y_advance / 64.;
   }
-#endif
+
+  /* create picture to composite into */
+  xcb_render_picture_t pic = xcb_generate_id(c);
+  xcb_render_create_picture_checked(c, pic, win, format, 0, 0);
+  testCookie(textCookie, c, "can't create picture");
+
+  int16_t src_x = 0;
+  int16_t src_y = 0;
+
+  textCookie = xcb_render_composite_glyphs_8_checked (c,
+      XCB_RENDER_PICT_OP_ADD, foreground, pic, format, gsid,
+    src_x, src_y, len, &glyphitems);
+  testCookie(textCookie, c, "can't composite glyph");
+
+  xcb_render_free_picture(c, pic);
   /*
   cairo_show_glyphs (cr, cairo_glyphs, len);
   cairo_glyph_free (cairo_glyphs);
+  Picture, PictOp, PictFormat, GlyphSet, Glyph
   */
 
   /*
   cairo_surface_write_to_png (cairo_surface, "out.png");
   */
   /*
-  xcb_render_composite_glyphs_8(c, op, src, dst, format, gsid,
-      src_x, src_y, len,
-      xcb_glyphs);
+  xcb_render_composite_glyphs_8();
       */
 
   while ((e = xcb_wait_for_event (c))) {
+  xcb_generic_error_t *err = (xcb_generic_error_t *)e;
     switch (e->response_type & ~0x80) {
     case XCB_EXPOSE:
       /*
@@ -355,6 +402,8 @@ main(int argc, char **argv)
       break;
     case XCB_KEY_PRESS:
       goto endloop;
+    case 0:
+      printf("Received X11 error %d\n", err->error_code);
     }
     free (e);
   }
@@ -365,9 +414,11 @@ main(int argc, char **argv)
   cairo_destroy (cr);
   cairo_surface_destroy (cairo_surface);
   */
+out:
   xcb_free_gc (c, foreground);
   xcb_free_gc (c, background);
   xcb_render_free_glyph_set (c, gsid);
+  xcb_disconnect (c);
 
   hb_buffer_destroy (hb_buffer);
   hb_font_destroy (hb_font);
