@@ -6,11 +6,11 @@ LDFLAGS = `pkg-config --libs $(PKGS)` -lm
 FONT = /usr/share/fonts/truetype/dejavu/DejaVuSans-BoldOblique.ttf
 TEXT = "This is some text"
 
-demo: hello-harfbuzz
+demo: hello-harfbuzz-xcb
 	./$< $(FONT) $(TEXT)
 
-debug: hello-harfbuzz
-	gdb --args ./$< /usr/share/fonts/truetype/dejavu/DejaVuSans-BoldOblique.ttf hioiasdfoiadsjf
+gdb: hello-harfbuzz-xcb
+	gdb --args ./$< $(FONT) $(TEXT)
 
 %: %.c
 	$(CC) -std=c99 -o $@ $^ $(CFLAGS) $(LDFLAGS)
