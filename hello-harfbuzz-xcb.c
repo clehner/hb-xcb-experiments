@@ -484,13 +484,15 @@ skip_hint:
   {
     double x_position = current_x + pos[i].x_offset / 64.;
     double y_position = current_y + pos[i].y_offset / 64.;
+    double dx = round(x_position + pos[i].x_offset / 64.);
+    double dy = round(-y_position + pos[i].y_offset / 64.);
     struct glyph_header glyph_header = {
       .count = 1,
-      .dx = current_x + pos[i].x_offset / 64.,
-      .dy = -current_y + pos[i].y_offset / 64.,
+      .dx = dx,
+      .dy = dy,
     };
-    current_x -= glyph_header.dx;
-    current_y -= glyph_header.dy;
+    current_x -= dx;
+    current_y -= dy;
     memcpy(glyphitems_buf + glyphitems_len, &glyph_header, sizeof glyph_header);
     glyphitems_len += sizeof(struct glyph_header);
     glyphitems_buf[glyphitems_len] = info[i].codepoint;
@@ -563,6 +565,8 @@ Picture, PictOp, PictFormat, GlyphSet, Glyph
         case 66: /* caps lock */
         case 37: /* control */
         case 24: /* Q */
+        case 36: /* enter */
+        case 65: /* space */
           goto endloop;
       }
     }
