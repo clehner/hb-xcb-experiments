@@ -9,7 +9,7 @@
 #include <xcb/xcb.h>
 #include <xcb/render.h>
 
-#define FONT_SIZE 30
+#define FONT_SIZE 36
 #define MARGIN (FONT_SIZE * .5)
 
 
