@@ -125,7 +125,6 @@ main(int argc, char **argv)
       double x_position = current_x + pos[i].x_offset / 64.;
       double y_position = current_y + pos[i].y_offset / 64.;
 
-
       char glyphname[32];
       hb_font_get_glyph_name (hb_font, gid, glyphname, sizeof (glyphname));
 
@@ -461,11 +460,15 @@ main(int argc, char **argv)
   double current_y = 0;
   for (unsigned int i = 0; i < len; i++)
   {
+    double x_position = current_x + pos[i].x_offset / 64.;
+    double y_position = current_y + pos[i].y_offset / 64.;
     struct glyph_header glyph_header = {
       .count = 1,
-      .dx = (pos[i].x_advance + pos[i].x_offset) / 64.,
-      .dy = (-pos[i].y_advance + pos[i].y_offset) / 64.,
+      .dx = current_x + pos[i].x_offset / 64.,
+      .dy = -current_y + pos[i].y_offset / 64.,
     };
+    current_x -= glyph_header.dx;
+    current_y -= glyph_header.dy;
     memcpy(glyphitems_buf + glyphitems_len, &glyph_header, sizeof glyph_header);
     glyphitems_len += sizeof(struct glyph_header);
     glyphitems_buf[glyphitems_len] = info[i].codepoint;
