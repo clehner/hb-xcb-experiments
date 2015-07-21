@@ -16,6 +16,24 @@
 xcb_render_pictformat_t get_pictformat_from_visual(xcb_render_query_pict_formats_reply_t *reply, xcb_visualid_t visual);
 xcb_render_pictforminfo_t *get_pictforminfo(xcb_render_query_pict_formats_reply_t *reply, xcb_render_pictforminfo_t *query);
 
+static xcb_atom_t
+intern_atom(xcb_connection_t *c, const char *str)
+{
+  xcb_intern_atom_cookie_t cookie;
+  xcb_intern_atom_reply_t *reply;
+  xcb_generic_error_t *err;
+  xcb_atom_t atom;
+
+  cookie = xcb_intern_atom(c, 0, strlen(str), str);
+  reply = xcb_intern_atom_reply(c, cookie, &err);
+  if (!reply) {
+    printf("intern dialog atom failed: %d\n", err->error_code);
+    return 0;
+  }
+  atom = reply->atom;
+  free(reply);
+  return atom;
+}
 
 static void
 put_str(xcb_connection_t *c, xcb_drawable_t drawable, xcb_gcontext_t gc,
@@ -185,8 +203,8 @@ main(int argc, char **argv)
   xcb_rectangle_t window_rect = {
     .x = 0,
     .y = 0,
-    .width = 150,
-    .height = 150
+    .width = 350,
+    .height = 60
   };
 
   /* create the window */
@@ -194,16 +212,36 @@ main(int argc, char **argv)
   mask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
   values[0] = screen->white_pixel;
   values[1] = XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_KEY_PRESS;
+
   xcb_create_window (c,                             /* connection    */
                      XCB_COPY_FROM_PARENT,          /* depth         */
                      win,                           /* window Id     */
                      screen->root,                  /* parent window */
                      0, 0,                          /* x, y          */
                      window_rect.width, window_rect.height,
-                     10,                            /* border_width  */
+                     0,                             /* border_width  */
                      XCB_WINDOW_CLASS_INPUT_OUTPUT, /* class         */
                      screen->root_visual,           /* visual        */
                      mask, values);                 /* masks         */
+
+
+
+  /* Mark as dialog */
+  xcb_atom_t atom_window_type = intern_atom(c, "_NET_WM_WINDOW_TYPE");
+  xcb_atom_t atom_dialog = intern_atom(c, "_NET_WM_WINDOW_TYPE_DIALOG");
+
+  if (atom_window_type && atom_dialog)
+    xcb_change_property (c, XCB_PROP_MODE_REPLACE, win, atom_window_type,
+        XCB_ATOM_CARDINAL, 32, 1, &atom_dialog);
+
+  /* Give it a title */
+  xcb_atom_t atom_wm_name = intern_atom(c, "_NET_WM_NAME");
+  const char win_title[] = "The text";
+  if (atom_wm_name)
+    xcb_change_property (c, XCB_PROP_MODE_REPLACE, win, atom_wm_name,
+        XCB_ATOM_STRING, 8, sizeof win_title - 1, win_title);
+
+skip_hint:
 
   /* Set up cairo surface. */
       /*
@@ -256,6 +294,7 @@ main(int argc, char **argv)
   }
   printf("render version: %u.%u\n",
       version->major_version, version->minor_version);
+  free(version);
 
   xcb_render_glyphset_t gsid;
   xcb_render_pictformat_t format, window_format;
@@ -305,6 +344,7 @@ main(int argc, char **argv)
 
   alpha_mask_format = alpha_forminfo_ptr->id;
 
+  free(formats_reply);
 
   /*
   iter = xcb_setup_roots_iterator (xcb_get_setup (c));
