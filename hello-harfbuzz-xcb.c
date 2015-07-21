@@ -491,11 +491,13 @@ main(int argc, char **argv)
 
   /* create src picture */
   xcb_pixmap_t src_pixmap = xcb_generate_id(c);
-  cookie = xcb_create_pixmap_checked(c, 8, src_pixmap, screen->root, 150, 150);
+  cookie = xcb_create_pixmap_checked(c, 8, src_pixmap, screen->root, 1, 1);
   testCookie(cookie, c, "can't create pixmap");
 
   xcb_render_picture_t src_pic = xcb_generate_id(c);
-  cookie = xcb_render_create_picture_checked(c, src_pic, screen->root, window_format, 0, 0);
+  values[0] = XCB_RENDER_REPEAT_NORMAL;
+  values[1] = 0;
+  cookie = xcb_render_create_picture_checked(c, src_pic, src_pixmap, alpha_mask_format, XCB_RENDER_CP_REPEAT, values);
   testCookie(cookie, c, "can't create source picture");
 
   cookie = xcb_render_fill_rectangles_checked(c, XCB_RENDER_PICT_OP_SRC,
