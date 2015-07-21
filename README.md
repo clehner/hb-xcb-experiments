@@ -16,3 +16,4 @@ However, perhaps it may be useful as a starting point.
   from which this is forked. shows how to use HarfBuzz and FreeType with Cairo
 - [node-x11/render-glyph.js](https://github.com/sidorares/node-x11/blob/master/examples/simple/text/render-glyph.js)
   shows how to use XRender with node-x11
+- [this thing](http://lists.freedesktop.org/archives/wayland-devel/2012-July/004344.html) - shows how to find formats using xcb\_render\_util

@@ -226,9 +226,9 @@ main(int argc, char **argv)
     .alpha = 0xffff
   };
   xcb_render_color_t glyphs_color = {
-    .red = 0x2222,
-    .green = 0x2222,
-    .blue = 0x6666,
+    .red = 0xffff,
+    .green = 0xffff,
+    .blue = 0xffff,
     .alpha = 0xffff
   };
 
@@ -380,7 +380,7 @@ main(int argc, char **argv)
     glyph.width = bitmap->width;
     glyph.height = bitmap->rows;
     glyph.x = 0;
-    glyph.y = 0; /* negative? 0? */
+    glyph.y = glyph.height - FONT_SIZE; /* negative? 0? */
     glyph.x_off = 0; // pos[i].x_advance / 64.;
     glyph.y_off = 0; // pos[i].y_advance / 64.;
     glyph_id = info[i].codepoint;
@@ -500,16 +500,9 @@ main(int argc, char **argv)
   cookie = xcb_render_create_picture_checked(c, src_pic, src_pixmap, alpha_mask_format, XCB_RENDER_CP_REPEAT, values);
   testCookie(cookie, c, "can't create source picture");
 
-  cookie = xcb_render_fill_rectangles_checked(c, XCB_RENDER_PICT_OP_SRC,
+  cookie = xcb_render_fill_rectangles_checked(c, XCB_RENDER_PICT_OP_DST,
       src_pic, glyphs_color, 1, &window_rect);
   testCookie(cookie, c, "can't fill rectangle");
-
-
-  /*
-  cookie = xcb_render_fill_rectangles_checked(c, XCB_RENDER_PICT_OP_OVER,
-      src, glyphs_color, 1, &window_rect);
-  testCookie(cookie, c, "can't fill rectangles");
-  */
 
   int16_t src_x = 0;
   int16_t src_y = 0;
