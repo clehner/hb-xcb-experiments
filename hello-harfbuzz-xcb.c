@@ -235,24 +235,6 @@ main(int argc, char **argv)
     {40, 40, 20, 20},
   };
 
-  xcb_flush(c);
-  while ((e = xcb_wait_for_event (c))) {
-    switch (e->response_type & ~0x80) {
-    case XCB_EXPOSE:
-      goto endloop1;
-      /*
-      xcb_poly_rectangle_checked (c, win, foreground, 1, rectangles);
-      testCookie(cookie, c, "can't poly rectangle");
-      xcb_flush (c);
-      */
-      break;
-    case XCB_KEY_PRESS:
-      goto endloop1;
-    }
-    free (e);
-  }
-  endloop1:{}
-
       /*
   cairo_t *cr;
   cr = cairo_create (cairo_surface);
@@ -514,18 +496,11 @@ main(int argc, char **argv)
 
   /* composite the glyphs */
 
-  cookie = xcb_render_composite_glyphs_8_checked (c,
-      XCB_RENDER_PICT_OP_ADD, src_pic, window_pict, 0, gsid,
-    src_x, src_y, glyphitems_len, glyphitems_buf);
-  testCookie(cookie, c, "can't composite glyphs");
-
   xcb_flush(c);
   /*
 Errors:
 Picture, PictOp, PictFormat, GlyphSet, Glyph
    */
-
-  xcb_render_free_picture(c, window_pict);
 
   /*
   cairo_surface_write_to_png (cairo_surface, "out.png");
@@ -535,20 +510,30 @@ Picture, PictOp, PictFormat, GlyphSet, Glyph
   xcb_generic_error_t *err = (xcb_generic_error_t *)e;
     switch (e->response_type & ~0x80) {
     case XCB_EXPOSE:
-      /*
-      xcb_poly_rectangle (c, win, foreground, 1, rectangles);
-      xcb_image_text_8 (c, string_len, win, background, 20, 20, string);
-      */
+      cookie = xcb_render_composite_glyphs_8_checked (c,
+          XCB_RENDER_PICT_OP_ADD, src_pic, window_pict, 0, gsid,
+          src_x, src_y, glyphitems_len, glyphitems_buf);
+      testCookie(cookie, c, "can't composite glyphs");
       xcb_flush (c);
       break;
-    case XCB_KEY_PRESS:
-      goto endloop;
+    case XCB_KEY_PRESS: {
+      xcb_key_press_event_t *kr = (xcb_key_press_event_t *)e;
+      switch (kr->detail) {
+        case 9: /* escape */
+        case 66: /* caps lock */
+        case 37: /* control */
+        case 24: /* Q */
+          goto endloop;
+      }
+    }
     case 0:
       printf("Received X11 error %d\n", err->error_code);
     }
     free (e);
   }
   endloop:
+
+  xcb_render_free_picture(c, window_pict);
 
   /*
   cairo_font_face_destroy (cairo_face);
