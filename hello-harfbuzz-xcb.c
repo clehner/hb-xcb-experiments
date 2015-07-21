@@ -39,15 +39,15 @@ put_str(xcb_connection_t *c, xcb_drawable_t drawable, xcb_gcontext_t gc,
 
 static void
 testCookie (xcb_void_cookie_t cookie,
-			xcb_connection_t *connection,
-			char *errMessage )
+    xcb_connection_t *connection,
+    char *errMessage )
 {
-	xcb_generic_error_t *error = xcb_request_check (connection, cookie);
-	if (error) {
-		printf ("ERROR: %s : %"PRIu8"\n", errMessage , error->error_code);
-		xcb_disconnect (connection);
-		exit (-1);
-	}
+  xcb_generic_error_t *error = xcb_request_check (connection, cookie);
+  if (error) {
+    printf ("ERROR: %s : %"PRIu8"\n", errMessage , error->error_code);
+    xcb_disconnect (connection);
+    exit (-1);
+  }
 }
 
 int
@@ -130,7 +130,7 @@ main(int argc, char **argv)
       hb_font_get_glyph_name (hb_font, gid, glyphname, sizeof (glyphname));
 
       printf ("glyph='%s'	cluster=%d	position=(%g,%g)\n",
-	      glyphname, cluster, x_position, y_position);
+          glyphname, cluster, x_position, y_position);
 
       current_x += pos[i].x_advance / 64.;
       current_y += pos[i].y_advance / 64.;
@@ -210,9 +210,9 @@ main(int argc, char **argv)
       /*
   cairo_surface_t *cairo_surface;
   cairo_surface = cairo_image_surface_create (CAIRO_FORMAT_ARGB32,
-					      ceil(width),
-					      ceil(height));
-					      */
+  ceil(width),
+  ceil(height));
+       */
 
   /* map the window on the screen */
   xcb_map_window_checked (c, win);
@@ -294,10 +294,10 @@ main(int argc, char **argv)
 
   for (unsigned int i = 0; i < formats_reply->num_formats; i++) {
     printf("pict format: type=%u, depth=%u\n", formats[i].type,
-	formats[i].depth);
+        formats[i].depth);
       /* TODO: figure out which one should really be picked */
     if (formats[i].type == XCB_RENDER_PICT_TYPE_DIRECT &&
-	formats[i].depth == 32) {
+        formats[i].depth == 32) {
       format = xcb_render_query_pict_formats_formats(formats_reply)->id;
       break;
     }
@@ -374,7 +374,7 @@ main(int argc, char **argv)
     FT_Bitmap *bitmap = &slot->bitmap;
 
     printf("bitmap size=(%u,%u)\n",
-	bitmap->width, bitmap->rows);
+        bitmap->width, bitmap->rows);
 
     /* copy into glyph data for xcb */
     glyph.width = bitmap->width;
@@ -396,7 +396,7 @@ main(int argc, char **argv)
     int8_t orig_width = bitmap->width;
     for (unsigned int y = 0; y < glyph.height; y++)
       for (unsigned int x = 0; x < glyph.width; x++)
-	buf[y * glyph.width + x] = bitmap->buffer[y * orig_width + x];
+        buf[y * glyph.width + x] = bitmap->buffer[y * orig_width + x];
     /*
     memset(buf, 0x44, buf_size);
     */
@@ -417,7 +417,7 @@ main(int argc, char **argv)
     */
 
     cookie = xcb_render_add_glyphs_checked (c, gsid, 1,
-	&glyph_id, &glyph, buf_size, buf);
+        &glyph_id, &glyph, buf_size, buf);
     testCookie(cookie, c, "can't add glyph");
 /*
     xcb_render_add_glyphs (c, gsid, 1, &glyph_id, &glyph, buf_size, buf);
@@ -516,9 +516,9 @@ main(int argc, char **argv)
 
   xcb_flush(c);
   /*
-	Errors:
-		Picture, PictOp, PictFormat, GlyphSet, Glyph
-		*/
+Errors:
+Picture, PictOp, PictFormat, GlyphSet, Glyph
+   */
 
   xcb_render_free_picture(c, window_pict);
 
