@@ -392,10 +392,12 @@ main(int argc, char **argv)
 
     buf_size = glyph.width * glyph.height;
     buf = alloca(buf_size);
+    memset(buf, 0, buf_size);
     uint8_t *bitmap_buf = bitmap->buffer;
     int8_t orig_width = bitmap->width;
-    for (unsigned int y = 0; y < glyph.height; y++)
-      for (unsigned int x = 0; x < glyph.width; x++)
+    int8_t orig_height = bitmap->rows;
+    for (unsigned int y = 0; y < orig_height; y++)
+      for (unsigned int x = 0; x < orig_width; x++)
         buf[y * glyph.width + x] = bitmap->buffer[y * orig_width + x];
     /*
     memset(buf, 0x44, buf_size);
